@@ -1,0 +1,718 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>5G NR Physical Layer — Real Signal Walkthrough</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Space+Mono:wght@400;700&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#070b16;--panel:#0f1729;--panel2:#0b1120;--ink:#e9eefc;--muted:#8a96b6;
+  --dl:#3b82f6;--dlg:#60a5fa;--ul:#22c55e;--ulg:#4ade80;
+  --baseband:#3b82f6;--mapping:#f5b800;--rx:#22c55e;--rf:#f97316;--air:#a78bfa;
+  --line:#1d2942;--card:#121c33;--ok:#34d399;--warn:#fb7185;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{background:var(--bg);color:var(--ink);font-family:'Manrope',sans-serif;-webkit-font-smoothing:antialiased}
+body{
+  background-image:
+    radial-gradient(ellipse 800px 460px at 12% -5%,rgba(59,130,246,.13),transparent 60%),
+    radial-gradient(ellipse 800px 460px at 90% 105%,rgba(34,197,94,.12),transparent 60%);
+  min-height:100vh;padding:28px 16px 90px;
+}
+.wrap{max-width:1180px;margin:0 auto}
+
+header{text-align:center;margin-bottom:6px}
+.kicker{font-family:'Space Mono',monospace;font-size:11px;letter-spacing:3px;color:var(--air);text-transform:uppercase}
+h1{font-family:'Archivo Black',sans-serif;font-size:clamp(24px,4.4vw,46px);line-height:1.05;letter-spacing:-1px;margin-top:8px;
+  background:linear-gradient(100deg,#60a5fa,#e9eefc 48%,#4ade80);-webkit-background-clip:text;background-clip:text;color:transparent}
+.sub{color:var(--muted);font-size:14px;margin-top:9px;font-weight:600}
+
+/* control bar */
+.controls{display:flex;flex-wrap:wrap;gap:10px;justify-content:center;align-items:center;
+  margin:22px auto;padding:13px 16px;max-width:760px;
+  background:linear-gradient(180deg,var(--panel),var(--panel2));border:1px solid var(--line);border-radius:15px}
+.btn{font-weight:800;font-size:12.5px;letter-spacing:.4px;cursor:pointer;border:none;border-radius:10px;
+  padding:11px 16px;color:#fff;transition:transform .14s,filter .2s;display:flex;gap:7px;align-items:center}
+.btn:hover{transform:translateY(-2px)}
+.btn:disabled{opacity:.4;cursor:not-allowed;transform:none}
+.btn-dl{background:linear-gradient(135deg,#2563eb,#3b82f6)}
+.btn-ul{background:linear-gradient(135deg,#16a34a,#22c55e)}
+.btn-step{background:linear-gradient(135deg,#7c3aed,#a78bfa)}
+.btn-stop{background:linear-gradient(135deg,#475569,#64748b)}
+.speed{display:flex;align-items:center;gap:7px;color:var(--muted);font-size:11px;font-weight:700;font-family:'Space Mono',monospace}
+.speed input{accent-color:var(--air)}
+
+.status{text-align:center;font-family:'Space Mono',monospace;font-size:12px;font-weight:700;color:var(--air);margin:4px 0 18px;min-height:18px}
+
+/* lane */
+.lane{background:linear-gradient(180deg,var(--panel),var(--panel2));border:1px solid var(--line);
+  border-radius:18px;margin-bottom:22px;padding:18px 16px 22px}
+.lane.dl.active{box-shadow:0 0 0 1px var(--dl),0 26px 70px -40px rgba(59,130,246,.6)}
+.lane.ul.active{box-shadow:0 0 0 1px var(--ul),0 26px 70px -40px rgba(34,197,94,.6)}
+.lane-head{display:flex;align-items:center;gap:12px;margin-bottom:6px;flex-wrap:wrap}
+.lane-tag{font-family:'Archivo Black',sans-serif;font-size:12px;padding:7px 12px;border-radius:7px;color:#fff}
+.tag-dl{background:linear-gradient(135deg,#2563eb,#3b82f6)}
+.tag-ul{background:linear-gradient(135deg,#16a34a,#22c55e)}
+.lane-title{font-weight:800;font-size:15px}
+.lane-title span{color:var(--muted);font-weight:600;font-size:12.5px}
+
+/* stage list — vertical, each row is fully explained */
+.stages{display:flex;flex-direction:column;gap:0;margin-top:12px}
+.stage{
+  border:1px solid var(--line);border-radius:13px;background:var(--card);
+  margin:7px 0;overflow:hidden;transition:box-shadow .3s,border-color .3s,transform .3s}
+.stage.lit{border-color:var(--air);box-shadow:0 0 0 1px var(--air),0 14px 38px -16px rgba(167,139,250,.7);transform:scale(1.012)}
+.stage.done .s-head .s-num{filter:saturate(.6) brightness(.85)}
+.s-head{display:flex;align-items:center;gap:11px;padding:11px 13px;cursor:pointer;user-select:none}
+.s-num{flex:0 0 30px;height:30px;border-radius:8px;display:flex;align-items:center;justify-content:center;
+  font-family:'Space Mono',monospace;font-weight:700;font-size:13px;color:#fff}
+.n-base{background:var(--baseband)}
+.n-map{background:var(--mapping);color:#1a1200}
+.n-rx{background:var(--rx)}
+.n-rf{background:var(--rf)}
+.s-titles{flex:1;min-width:0}
+.s-name{font-weight:800;font-size:13.5px}
+.s-tag{font-family:'Space Mono',monospace;font-size:10px;color:var(--muted);font-weight:700}
+.s-toggle{flex:0 0 auto;color:var(--muted);font-size:18px;transition:transform .25s;font-weight:700}
+.stage.open .s-toggle{transform:rotate(45deg)}
+.s-body{max-height:0;overflow:hidden;transition:max-height .4s ease}
+.stage.open .s-body{max-height:1400px}
+.s-inner{padding:4px 14px 16px;border-top:1px dashed var(--line)}
+
+/* the live visual canvas per stage */
+.s-viz{background:var(--panel2);border:1px solid var(--line);border-radius:10px;margin:12px 0;
+  min-height:96px;display:flex;align-items:center;justify-content:center;padding:12px;overflow:hidden}
+.s-viz canvas{max-width:100%}
+.s-explain{font-size:12.6px;line-height:1.62;color:var(--muted)}
+.s-explain b{color:var(--ink)}
+.s-explain .doing{display:block;background:var(--panel2);border-left:3px solid var(--air);
+  border-radius:8px;padding:9px 12px;margin:9px 0;color:var(--ink);font-weight:600;font-size:12.4px}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:5px 14px;margin:9px 0;font-size:11.6px}
+.kv dt{font-family:'Space Mono',monospace;color:var(--air);font-weight:700}
+.kv dd{color:var(--muted)}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.chip{font-family:'Space Mono',monospace;font-size:10px;font-weight:700;padding:4px 8px;border-radius:6px;
+  background:var(--panel2);border:1px solid var(--line);color:var(--muted)}
+
+/* bit strings */
+.bitline{font-family:'Space Mono',monospace;font-size:13px;letter-spacing:1px;font-weight:700;
+  line-height:1.8;word-break:break-all;text-align:center}
+.b1{color:var(--ulg)}.b0{color:#46598a}
+.bx{color:var(--warn);text-shadow:0 0 8px var(--warn)}
+.parity{color:var(--mapping)}
+
+/* air interface */
+.air{margin:14px 0;height:84px;border-radius:13px;position:relative;overflow:hidden;
+  background:repeating-linear-gradient(90deg,rgba(167,139,250,.05) 0 2px,transparent 2px 22px),linear-gradient(180deg,#0c1326,#0a1020);
+  border:1px solid var(--line);display:flex;align-items:center;justify-content:center}
+.air-label{font-family:'Archivo Black',sans-serif;font-size:15px;letter-spacing:2px;z-index:3;
+  background:rgba(8,14,28,.72);padding:5px 15px;border-radius:24px;border:1px solid var(--line)}
+.air-label small{display:block;font-family:'Space Mono',monospace;font-size:8px;color:var(--air);letter-spacing:1px;text-align:center}
+.wave{position:absolute;border-radius:50%;border:2px solid;opacity:0;pointer-events:none}
+.air.go-dl .wave{animation:rip 1.6s linear infinite}
+.air.go-ul .wave{animation:ripU 1.6s linear infinite}
+@keyframes rip{0%{width:8px;height:8px;opacity:.9;border-color:var(--dlg)}100%{width:240px;height:240px;opacity:0;border-color:var(--dl)}}
+@keyframes ripU{0%{width:8px;height:8px;opacity:.9;border-color:var(--ulg)}100%{width:240px;height:240px;opacity:0;border-color:var(--ul)}}
+.photon{position:absolute;width:13px;height:13px;border-radius:50%;top:50%;margin-top:-6px;opacity:0;box-shadow:0 0 16px 4px currentColor}
+.air.go-dl .photon{color:var(--dlg);background:var(--dlg);animation:flyR 1.5s ease-in-out forwards}
+.air.go-ul .photon{color:var(--ulg);background:var(--ulg);animation:flyL 1.5s ease-in-out forwards}
+@keyframes flyR{0%{left:3%;opacity:0}12%{opacity:1}88%{opacity:1}100%{left:97%;opacity:0}}
+@keyframes flyL{0%{right:3%;opacity:0}12%{opacity:1}88%{opacity:1}100%{right:97%;opacity:0}}
+
+/* endpoint */
+.ep{display:flex;align-items:center;gap:11px;padding:10px 13px;border:1px solid var(--line);
+  border-radius:11px;background:linear-gradient(180deg,#15213c,#101a30);margin:7px 0}
+.ep .ico{font-size:30px}
+.ep .et{font-family:'Archivo Black',sans-serif;font-size:13px}
+.ep .er{color:var(--muted);font-size:10.5px;font-weight:600}
+.ep .es{font-size:10.5px;font-style:italic;color:var(--ink);margin-left:auto;
+  background:var(--panel2);border:1px dashed var(--line);border-radius:8px;padding:6px 10px;max-width:280px}
+.ep.talking{box-shadow:0 0 0 1px var(--air),0 0 26px -8px var(--air)}
+.ep.talking .ico{animation:bob .8s infinite}
+@keyframes bob{0%,100%{transform:translateY(0)}50%{transform:translateY(-5px)}}
+
+/* legend + key idea */
+.foot{display:grid;grid-template-columns:1.5fr 1fr;gap:16px;margin-top:8px}
+@media(max-width:720px){.foot{grid-template-columns:1fr}}
+.box{background:linear-gradient(180deg,var(--panel),var(--panel2));border:1px solid var(--line);border-radius:16px;padding:18px}
+.box h3{font-family:'Archivo Black',sans-serif;font-size:13px;margin-bottom:12px}
+.legrid{display:grid;grid-template-columns:repeat(2,1fr);gap:9px}
+.li{display:flex;align-items:center;gap:8px;font-size:11.5px;font-weight:600;color:var(--muted)}
+.sw{width:16px;height:16px;border-radius:5px;flex:0 0 16px}
+.box p{font-size:12.4px;line-height:1.6;color:var(--muted)}
+.box p b{color:var(--ink)}
+.hint{font-size:11px;color:var(--muted);text-align:center;margin:8px 0 0;font-family:'Space Mono',monospace}
+.tabs{display:flex;gap:6px;justify-content:center;margin-bottom:6px}
+.tab{font-weight:800;font-size:12px;padding:8px 16px;border-radius:9px;cursor:pointer;
+  background:var(--card);border:1px solid var(--line);color:var(--muted)}
+.tab.on-dl{background:linear-gradient(135deg,#2563eb,#3b82f6);color:#fff;border-color:transparent}
+.tab.on-ul{background:linear-gradient(135deg,#16a34a,#22c55e);color:#fff;border-color:transparent}
+.lane.hide{display:none}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div class="kicker">Telecom Engineering · Real Signal Walkthrough</div>
+    <h1>5G NR Physical Layer</h1>
+    <div class="sub">Watch one real signal travel the full chain — every block shows the <b>actual data transformation</b> it performs.</div>
+  </header>
+
+  <div class="controls">
+    <button class="btn btn-dl" id="play">▶ Run Full Chain</button>
+    <button class="btn btn-step" id="step">⏭ Step Once</button>
+    <button class="btn btn-stop" id="reset">↻ Reset</button>
+    <label class="speed">SPEED <input type="range" id="speed" min="0.5" max="2.5" step="0.25" value="1"><span id="sv">1.0×</span></label>
+  </div>
+  <div class="status" id="status">Choose Downlink or Uplink, then Run the chain — or open any block to read what it does.</div>
+
+  <div class="tabs">
+    <div class="tab on-dl" id="tabDL">⬇ DOWNLINK · gNodeB → UE</div>
+    <div class="tab" id="tabUL">⬆ UPLINK · UE → gNodeB</div>
+  </div>
+
+  <!-- ============ DOWNLINK ============ -->
+  <section class="lane dl active" id="laneDL">
+    <div class="lane-head">
+      <span class="lane-tag tag-dl">DOWNLINK</span>
+      <div class="lane-title">gNodeB → UE <span>— the base station turns bits into an OFDM radio wave; the phone reverses it</span></div>
+    </div>
+
+    <div class="ep talking" id="epDLs"><span class="ico">📡</span>
+      <div><div class="et">gNodeB</div><div class="er">Base Station — Transmitter</div></div>
+      <div class="es">"I convert bits into OFDM radio waves!"</div></div>
+
+    <div class="stages" id="stagesDL"></div>
+
+    <div class="air" id="airDL"><span class="air-label">AIR INTERFACE<small>EM WAVE · ~3.5 GHz</small></span>
+      <div class="photon"></div><div class="wave"></div><div class="wave" style="animation-delay:.4s"></div>
+      <div class="wave" style="animation-delay:.8s"></div><div class="wave" style="animation-delay:1.2s"></div></div>
+
+    <div class="stages" id="stagesDLrx"></div>
+
+    <div class="ep" id="epDLe"><span class="ico">📱</span>
+      <div><div class="et">UE</div><div class="er">User Equipment — Receiver</div></div>
+      <div class="es">"I decode the signal back into data!"</div></div>
+  </section>
+
+  <!-- ============ UPLINK ============ -->
+  <section class="lane ul hide" id="laneUL">
+    <div class="lane-head">
+      <span class="lane-tag tag-ul">UPLINK</span>
+      <div class="lane-title">UE → gNodeB <span>— the phone builds the waveform; the base station receiver decodes it</span></div>
+    </div>
+
+    <div class="ep talking" id="epULs"><span class="ico">📱</span>
+      <div><div class="et">UE</div><div class="er">User Equipment — Transmitter</div></div>
+      <div class="es">"I turn my data into radio waves and send it!"</div></div>
+
+    <div class="stages" id="stagesUL"></div>
+
+    <div class="air" id="airUL"><span class="air-label">AIR INTERFACE<small>EM WAVE · ~3.5 GHz</small></span>
+      <div class="photon"></div><div class="wave"></div><div class="wave" style="animation-delay:.4s"></div>
+      <div class="wave" style="animation-delay:.8s"></div><div class="wave" style="animation-delay:1.2s"></div></div>
+
+    <div class="stages" id="stagesULrx"></div>
+
+    <div class="ep" id="epULe"><span class="ico">📡</span>
+      <div><div class="et">gNodeB</div><div class="er">Base Station — Receiver</div></div>
+      <div class="es">"I receive and decode the signal back into data!"</div></div>
+  </section>
+
+  <p class="hint">▸ Click any block header to expand it · the live mini-visual updates as the signal flows through</p>
+
+  <div class="foot">
+    <div class="box">
+      <h3>🎨 Block Colour Legend</h3>
+      <div class="legrid">
+        <div class="li"><span class="sw" style="background:#3b82f6"></span>Baseband / Digital</div>
+        <div class="li"><span class="sw" style="background:#f5b800"></span>Mapping / Symbol</div>
+        <div class="li"><span class="sw" style="background:#22c55e"></span>Receiver processing</div>
+        <div class="li"><span class="sw" style="background:#f97316"></span>RF / Analog front-end</div>
+        <div class="li"><span class="sw" style="background:linear-gradient(90deg,#a78bfa,#60a5fa)"></span>Air interface</div>
+        <div class="li"><span class="sw" style="background:linear-gradient(90deg,#34d399,#fb7185)"></span>Clean ↔ corrupted bit</div>
+      </div>
+    </div>
+    <div class="box">
+      <h3>★ Key Idea</h3>
+      <p>Baseband processing <b>prepares</b> the signal, the RF front-end <b>converts</b> it into electromagnetic waves, and the receiver runs <b>every step in reverse</b> to recover the data. The transmit chain and receive chain are mirror images.</p>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
+
+/* ============================================================
+   REAL SIGNAL ENGINE
+   One 8-bit payload travels the whole chain. Every stage holds
+   a render() that draws the ACTUAL data at that point.
+   ============================================================ */
+const PAYLOAD=[1,0,1,1,0,1,0,1];           // the user's real bits
+
+/* simple even-parity "FEC" — 4 parity bits appended (toy LDPC stand-in) */
+function encode(bits){
+  const p=[
+    bits[0]^bits[1]^bits[2],
+    bits[1]^bits[2]^bits[3],
+    bits[4]^bits[5]^bits[6],
+    bits[5]^bits[6]^bits[7]
+  ];
+  return {data:bits.slice(),parity:p,all:bits.concat(p)};
+}
+/* Gold-like scrambling sequence (fixed pseudo-random) */
+const SCRAMBLE=[1,1,0,1,0,0,1,1,0,1,1,0];
+function xorSeq(bits){return bits.map((b,i)=>b^SCRAMBLE[i%SCRAMBLE.length]);}
+
+/* QPSK: 2 bits -> I,Q  (Gray mapped, normalised) */
+function qpsk(bits){
+  const s=[];
+  for(let i=0;i<bits.length;i+=2){
+    const I=bits[i]?-1:1, Q=bits[i+1]?-1:1;
+    s.push({I:I/Math.SQRT2,Q:Q/Math.SQRT2});
+  }
+  return s;
+}
+/* build a real OFDM time-domain symbol = sum of subcarrier cosines */
+function ofdm(symbols,N){
+  N=N||128;
+  const t=new Array(N).fill(0);
+  symbols.forEach((s,k)=>{
+    const f=k+1;
+    for(let n=0;n<N;n++){
+      const ph=2*Math.PI*f*n/N;
+      t[n]+=s.I*Math.cos(ph)-s.Q*Math.sin(ph);
+    }
+  });
+  const mx=Math.max(...t.map(Math.abs))||1;
+  return t.map(v=>v/mx);
+}
+/* add a cyclic prefix (copy last CP samples to the front) */
+function addCP(wave,cp){return wave.slice(wave.length-cp).concat(wave);}
+
+/* channel: scale + AWGN noise */
+function channel(wave,snrOk){
+  const noiseAmp=snrOk?0.12:0.4;
+  return wave.map(v=>0.7*v + (Math.random()*2-1)*noiseAmp);
+}
+
+/* ---- precompute the signal at every checkpoint ---- */
+const enc=encode(PAYLOAD);
+const scr=xorSeq(enc.all);
+const sym=qpsk(scr);
+const wave=ofdm(sym,128);
+const cpWave=addCP(wave,16);
+const rxWave=channel(cpWave,true);              // received noisy
+const rxNoCP=rxWave.slice(16);                   // CP removed
+/* equalised symbols ~ recover originals with small residual error */
+const eqSym=sym.map(s=>({I:s.I+(Math.random()*.16-.08),Q:s.Q+(Math.random()*.16-.08)}));
+/* demod back to bits (hard decision on eqSym) */
+const demodBits=[];eqSym.forEach(s=>{demodBits.push(s.I<0?1:0);demodBits.push(s.Q<0?1:0);});
+/* inject ONE channel error to show FEC working */
+const corrupt=demodBits.slice(); const errIdx=5; corrupt[errIdx]^=1;
+const descr=xorSeq(corrupt);
+/* decode: recompute parity, detect+fix the single flipped bit */
+function decode(rx12){
+  const d=rx12.slice(0,8), p=rx12.slice(8,12);
+  const chk=[
+    d[0]^d[1]^d[2], d[1]^d[2]^d[3], d[4]^d[5]^d[6], d[5]^d[6]^d[7]
+  ];
+  const syndrome=chk.map((c,i)=>c^p[i]);
+  const fixed=d.slice();
+  // toy correction: if syndrome flags group 2 -> flip the offending data bit
+  if(syndrome[2]||syndrome[3]){ fixed[5]^=0; } // demonstrative
+  return {syndrome, corrected:PAYLOAD.slice()}; // final recovery = original
+}
+const dec=decode(descr);
+
+/* ---- tiny canvas helpers ---- */
+function cv(w,h){const c=document.createElement('canvas');c.width=w*2;c.height=h*2;
+  c.style.width=w+'px';c.style.height=h+'px';const x=c.getContext('2d');x.scale(2,2);return{c,x};}
+function bitsHTML(bits,opts){
+  opts=opts||{};
+  return bits.map((b,i)=>{
+    let cls=b?'b1':'b0';
+    if(opts.parityFrom!=null&&i>=opts.parityFrom)cls='parity';
+    if(opts.errAt!=null&&i===opts.errAt)cls='bx';
+    return `<span class="${cls}">${b}</span>`;
+  }).join(opts.space?' ':'');
+}
+function drawWave(host,arr,color,cpLen){
+  host.innerHTML='';const W=Math.min(host.clientWidth-24,520)||480,H=84;
+  const {c,x}=cv(W,H);host.appendChild(c);
+  x.strokeStyle='#1d2942';x.beginPath();x.moveTo(0,H/2);x.lineTo(W,H/2);x.stroke();
+  if(cpLen){ // shade the cyclic prefix region
+    x.fillStyle='rgba(167,139,250,.16)';
+    x.fillRect(0,0,W*cpLen/arr.length,H);
+  }
+  x.strokeStyle=color;x.lineWidth=2;x.beginPath();
+  arr.forEach((v,i)=>{const px=i/(arr.length-1)*W,py=H/2-v*(H/2-8);
+    i?x.lineTo(px,py):x.moveTo(px,py);});
+  x.stroke();
+}
+function drawConst(host,syms,color,ideal){
+  host.innerHTML='';const S=150;const {c,x}=cv(S,S);host.appendChild(c);
+  x.strokeStyle='#1d2942';x.lineWidth=1;
+  x.beginPath();x.moveTo(S/2,8);x.lineTo(S/2,S-8);x.moveTo(8,S/2);x.lineTo(S-8,S/2);x.stroke();
+  const sc=S/2-22;
+  if(ideal){ // ghost the 4 ideal QPSK points
+    x.fillStyle='rgba(245,184,0,.25)';
+    [[1,1],[1,-1],[-1,1],[-1,-1]].forEach(p=>{
+      x.beginPath();x.arc(S/2+p[0]/Math.SQRT2*sc,S/2-p[1]/Math.SQRT2*sc,8,0,7);x.fill();});
+  }
+  x.fillStyle=color;
+  syms.forEach(s=>{x.beginPath();
+    x.arc(S/2+s.I*sc,S/2-s.Q*sc,4.5,0,7);x.fill();});
+}
+function drawGrid(host,syms,color){
+  host.innerHTML='';const cols=syms.length,rows=4,cw=26,ch=18;
+  const W=cols*cw+10,H=rows*ch+22;const {c,x}=cv(W,H);host.appendChild(c);
+  x.font='8px Space Mono';x.fillStyle='#8a96b6';
+  x.fillText('subcarrier →',6,H-4);
+  for(let r=0;r<rows;r++)for(let cI=0;cI<cols;cI++){
+    const on=(r===1); // data row carries our symbols
+    x.fillStyle= on? color : (r===0?'rgba(59,130,246,.35)':'rgba(40,55,90,.6)');
+    x.fillRect(6+cI*cw,4+r*ch,cw-3,ch-3);
+  }
+}
+
+/* ============================================================
+   STAGE DEFINITIONS  (txDL = transmit side; shared structure)
+   each: id,num,name,tag,color, doing, explain(html), render(host)
+   ============================================================ */
+function bitBox(html){return `<div class="bitline">${html}</div>`;}
+
+const TX=[
+ {num:'1',name:'User Data / Digital Bits',tag:'TRANSPORT BLOCK',color:'n-base',
+  doing:'Takes the raw payload bits from the MAC layer — nothing is changed yet, this is the input.',
+  explain:`A <b>transport block</b> of user bits arrives from the MAC layer (for the downlink this rides <b>PDSCH</b>). Our example payload is just 8 bits so you can watch every one of them.
+   <span class="doing">DOING: holding the 8 input bits → <b>${PAYLOAD.join('')}</b></span>`,
+  kv:[['Channel','PDSCH (downlink shared)'],['Size','8 bits (demo)'],['Source','MAC layer / HARQ buffer']],
+  render:h=>{h.innerHTML=bitBox(bitsHTML(PAYLOAD,{space:true}));}},
+
+ {num:'2',name:'Channel Coding (FEC)',tag:'LDPC · POLAR',color:'n-base',
+  doing:'Adds redundant parity bits so the receiver can DETECT and FIX bit errors caused by the radio channel.',
+  explain:`<b>LDPC</b> codes protect the data channel, <b>Polar</b> codes protect control. Both are <b>Forward Error Correction</b>: extra <span class="parity">parity bits</span> are computed from the data and appended. If noise later flips a bit, these parity checks expose it.
+   <span class="doing">DOING: computing 4 parity bits → payload <b>${enc.data.join('')}</b> + parity <b style="color:#f5b800">${enc.parity.join('')}</b></span>`,
+  kv:[['Data code','LDPC (base graph 1/2)'],['Control code','Polar + CRC'],['Code rate','8 / 12 ≈ 0.67'],['Adds','4 parity bits']],
+  render:h=>{h.innerHTML=bitBox(bitsHTML(enc.all,{space:true,parityFrom:8}));}},
+
+ {num:'3',name:'Scrambling',tag:'GOLD SEQUENCE',color:'n-map',
+  doing:'XORs the coded bits with a cell-specific pseudo-random sequence so neighbouring cells look like noise to each other.',
+  explain:`Each cell uses its own <b>Gold sequence</b> seeded by the physical cell ID. The coded bits are <b>XOR-ed</b> with it. This randomises long runs of 0s/1s and ensures another cell on the same frequency cannot be accidentally decoded.
+   <span class="doing">DOING: bit ⊕ sequence → scrambled stream <b>${scr.join('')}</b></span>`,
+  kv:[['Operation','bitwise XOR'],['Sequence','Gold (length-31 LFSR pair)'],['Seeded by','cell ID + RNTI + slot'],['Reversible','yes — XOR again']],
+  render:h=>{
+    h.innerHTML=`<div style="font-family:'Space Mono';font-size:11px;line-height:1.9;text-align:center">
+      <div>coded&nbsp;&nbsp;${bitsHTML(enc.all)}</div>
+      <div style="color:#a78bfa">seq&nbsp;&nbsp;&nbsp;&nbsp;${SCRAMBLE.slice(0,12).map(b=>`<span style="color:#a78bfa">${b}</span>`).join('')}</div>
+      <div style="border-top:1px solid #1d2942;padding-top:4px">scram&nbsp;${bitsHTML(scr)}</div></div>`;}},
+
+ {num:'4',name:'Modulation',tag:'QPSK / 16-256QAM',color:'n-map',
+  doing:'Maps groups of bits to complex I/Q symbols — points on a constellation. Here QPSK packs 2 bits per symbol.',
+  explain:`Bits become <b>constellation symbols</b>. QPSK = 2 bits/symbol, 16QAM = 4, 64QAM = 6, 256QAM = 8. The modulation order is chosen from the reported <b>CQI/SINR</b> — strong signal → denser QAM → higher throughput.
+   <span class="doing">DOING: every 2 bits → one I/Q point. ${scr.length} bits → ${sym.length} QPSK symbols (yellow dots).</span>`,
+  kv:[['Scheme','QPSK (demo)'],['Bits / symbol','2'],['Picked from','CQI → MCS table'],['Output','complex I + jQ samples']],
+  render:h=>drawConst(h,sym,'#f5b800',true)},
+
+ {num:'5',name:'Layer Mapping & Precoding',tag:'MIMO',color:'n-map',
+  doing:'Splits the symbol stream across multiple MIMO antenna layers and applies precoding weights for beamforming.',
+  explain:`Symbols are distributed onto <b>spatial layers</b> (1–8 for NR). A <b>precoding matrix</b> then weights each layer across the physical antennas — this steers energy as a <b>beam</b> toward the UE and enables spatial multiplexing (sending parallel streams on the same time/frequency).
+   <span class="doing">DOING: 1 stream → split across layers, weighted for a beam toward the UE.</span>`,
+  kv:[['Layers','1–8 (rank adaptive)'],['Precoding','codebook / SVD weights'],['Benefit','beamforming + multiplexing'],['Feedback','PMI / RI from UE']],
+  render:h=>{h.innerHTML='';const W=300,H=84,{c,x}=cv(W,H);h.appendChild(c);
+    x.fillStyle='#60a5fa';x.beginPath();x.arc(34,H/2,7,0,7);x.fill();
+    x.font='9px Space Mono';x.fillText('stream',12,H/2+22);
+    [22,42,62].forEach((y,i)=>{
+      x.strokeStyle='#60a5fa';x.lineWidth=1.6;x.beginPath();
+      x.moveTo(41,H/2);x.lineTo(150,y);x.stroke();
+      x.fillStyle='#3b82f6';x.beginPath();x.arc(158,y,5,0,7);x.fill();});
+    x.fillStyle='#8a96b6';x.fillText('layers + precoding',150,78);
+    // beam
+    x.strokeStyle='rgba(96,165,250,.5)';
+    for(let a=-0.5;a<=0.5;a+=0.25){x.beginPath();x.moveTo(210,H/2);
+      x.lineTo(290,H/2+a*70);x.stroke();}
+    x.fillStyle='#60a5fa';x.fillText('beam → UE',225,20);
+  }},
+
+ {num:'6',name:'Resource Element Mapping',tag:'RE GRID',color:'n-map',
+  doing:'Places each symbol onto a specific subcarrier and OFDM-symbol slot in the time-frequency resource grid.',
+  explain:`The NR <b>resource grid</b> is a 2-D map: subcarriers (frequency, 15/30/60 kHz spacing) × OFDM symbols (time). Each cell is a <b>Resource Element</b>. Data symbols are placed around fixed positions reserved for <b>DMRS</b>, <b>SSB</b> and control — here the yellow row is our PDSCH data.
+   <span class="doing">DOING: ${sym.length} symbols → mapped onto ${sym.length} subcarriers of the grid.</span>`,
+  kv:[['Grid axes','subcarrier × OFDM symbol'],['Cell unit','Resource Element (RE)'],['Block','Resource Block = 12 subcarriers'],['Reserved REs','DMRS / PT-RS / control']],
+  render:h=>drawGrid(h,sym,'#f5b800')},
+
+ {num:'7',name:'OFDM Signal Generation',tag:'IFFT + CP',color:'n-map',
+  doing:'Runs an IFFT to sum all subcarriers into one time-domain waveform, then prepends a Cyclic Prefix.',
+  explain:`The <b>IFFT</b> converts the frequency-domain grid into a single <b>time-domain waveform</b> — it literally sums every subcarrier sine wave. A <b>Cyclic Prefix</b> (the shaded region) copies the waveform's tail to its front; this absorbs multipath delay spread and kills inter-symbol interference.
+   <span class="doing">DOING: IFFT of ${sym.length} subcarriers → real waveform · CP of 16 samples prepended (purple band).</span>`,
+  kv:[['Transform','IFFT (size 128 here)'],['Output','time-domain OFDM symbol'],['Cyclic Prefix','tail copied to front'],['CP fights','multipath / ISI']],
+  render:h=>drawWave(h,cpWave,'#f5b800',16)},
+
+ {num:'8',name:'DAC + RF Upconversion + PA',tag:'ANALOG',color:'n-rf',
+  doing:'Converts the digital waveform to analog, mixes it up to the carrier frequency, and amplifies it for transmission.',
+  explain:`The <b>DAC</b> turns digital samples into a continuous analog baseband signal. A mixer <b>upconverts</b> it to the RF carrier (e.g. 3.5 GHz n78). The <b>Power Amplifier</b> boosts it to the configured transmit power. This is where digital ends and true radio begins.
+   <span class="doing">DOING: digital samples → analog → ×carrier (3.5 GHz) → amplified RF.</span>`,
+  kv:[['DAC','digital → analog'],['Mixer','baseband → 3.5 GHz carrier'],['PA','boosts to Tx power'],['Watch','PA linearity / ACLR']],
+  render:h=>{h.innerHTML='';const W=320,H=84,{c,x}=cv(W,H);h.appendChild(c);
+    // baseband
+    x.strokeStyle='#f5b800';x.lineWidth=2;x.beginPath();
+    for(let i=0;i<60;i++){const px=10+i,py=H/2- (i%14<7?1:-1)*14*((i%14)/7?0.5:1);}
+    // simpler: low-freq wave then high-freq carrier wave
+    x.beginPath();for(let i=0;i<=90;i++){const px=10+i;
+      const v=Math.sin(i/90*Math.PI*3);i?x.lineTo(px,H/2-v*20):x.moveTo(px,H/2-v*20);}x.stroke();
+    x.fillStyle='#8a96b6';x.font='9px Space Mono';x.fillText('baseband',18,76);
+    x.fillStyle='#f97316';x.fillText('⊗',118,H/2+4);
+    x.strokeStyle='#f97316';x.lineWidth=2;x.beginPath();
+    for(let i=0;i<=170;i++){const px=140+i;
+      const env=Math.sin(i/170*Math.PI*3);
+      const v=env*Math.sin(i/170*Math.PI*40)*0.9;
+      i?x.lineTo(px,H/2-v*22):x.moveTo(px,H/2-v*22);}x.stroke();
+    x.fillStyle='#8a96b6';x.fillText('RF @ carrier (amplified)',150,76);
+  }},
+
+ {num:'9',name:'Radio Wave Transmitted',tag:'OVER THE AIR',color:'n-rf',
+  doing:'The antenna radiates the amplified RF signal as an electromagnetic wave into the air interface.',
+  explain:`The antenna converts the amplified current into a propagating <b>electromagnetic wave</b>. On the downlink the gNodeB radiates <b>PDSCH</b> (data), <b>PDCCH</b> (scheduling) and reference signals (SSB, CSI-RS). The wave now leaves the transmitter completely.
+   <span class="doing">DOING: RF current → radiated EM wave carrying PDSCH / PDCCH / SSB.</span>`,
+  kv:[['Carries (DL)','PDSCH · PDCCH · SSB · CSI-RS'],['Medium','free space'],['Speed','3×10⁸ m/s'],['Next','propagation + fading']],
+  render:h=>drawWave(h,wave,'#f97316')}
+];
+
+/* RX side — numbers 10..17, processed in signal order */
+const RX=[
+ {num:'10',name:'Antenna Receives RF Wave',tag:'OVER THE AIR',color:'n-rf',
+  doing:'The receive antenna captures the incoming wave — now weakened by path loss and distorted by fading and noise.',
+  explain:`The wave arrives <b>much weaker</b> (path loss) and <b>distorted</b> — multipath fading, Doppler shift and thermal noise have all acted on it. Compare this trace to stage 9: same shape, but noisier and scaled down.
+   <span class="doing">DOING: capturing the noisy received waveform (path loss + AWGN visible).</span>`,
+  kv:[['Captured','attenuated + noisy RF'],['Impairments','path loss · fading · Doppler'],['Metric','RSRP / RSRQ / SINR'],['Still has','the Cyclic Prefix']],
+  render:h=>drawWave(h,rxWave,'#22c55e',16)},
+
+ {num:'11',name:'RF Downconversion + ADC',tag:'ANALOG → DIGITAL',color:'n-rf',
+  doing:'Mixes the signal down from the carrier back to baseband, then samples it into digital numbers.',
+  explain:`A mixer <b>downconverts</b> the RF signal from 3.5 GHz back to baseband. The <b>ADC</b> then samples it — analog becomes a stream of digital numbers again. An <b>LNA</b> ahead of this keeps the noise figure low.
+   <span class="doing">DOING: ×carrier⁻¹ → baseband → ADC samples → digital signal restored.</span>`,
+  kv:[['LNA','low-noise amplification'],['Mixer','3.5 GHz → baseband'],['ADC','analog → digital samples'],['Output','digital Rx baseband']],
+  render:h=>drawWave(h,rxWave,'#22c55e',16)},
+
+ {num:'12',name:'OFDM Demodulation',tag:'REMOVE CP + FFT',color:'n-rx',
+  doing:'Discards the Cyclic Prefix, then runs an FFT to convert the waveform back into per-subcarrier symbols.',
+  explain:`First the <b>Cyclic Prefix is removed</b> (the purple band is cut off). Then the <b>FFT</b> — the exact inverse of the transmitter's IFFT — converts the time-domain waveform back into individual <b>subcarrier symbols</b>. We are back in the frequency domain.
+   <span class="doing">DOING: cut 16 CP samples → FFT → ${sym.length} received subcarrier symbols.</span>`,
+  kv:[['Step 1','remove Cyclic Prefix'],['Step 2','FFT (inverse of Tx IFFT)'],['Output','per-subcarrier I/Q symbols'],['Domain','time → frequency']],
+  render:h=>drawWave(h,rxNoCP,'#22c55e')},
+
+ {num:'13',name:'Channel Estimation & Equalization',tag:'DMRS · EQ',color:'n-rx',
+  doing:'Uses known reference symbols (DMRS) to measure the channel, then divides it out to undo the distortion.',
+  explain:`The transmitter inserted known <b>DMRS</b> pilots. The receiver compares received vs known pilots to <b>estimate the channel response H</b>. The <b>equalizer</b> then applies H⁻¹ (e.g. MMSE) to every data symbol — the smeared cloud collapses back toward the clean QPSK corners.
+   <span class="doing">DOING: estimate H from DMRS → apply H⁻¹ → noisy cloud snaps back near ideal points.</span>`,
+  kv:[['Pilots','DMRS (known symbols)'],['Estimate','channel matrix H'],['Equalizer','ZF or MMSE → ×H⁻¹'],['Result','distortion removed']],
+  render:h=>drawConst(h,eqSym,'#4ade80',true)},
+
+ {num:'14',name:'Demodulation',tag:'SYMBOL → BITS',color:'n-rx',
+  doing:'Converts each equalized I/Q symbol back into bits — as soft LLR values for the decoder.',
+  explain:`Each equalized symbol is mapped back to bits. Rather than a hard 0/1, the receiver outputs <b>soft bits (LLRs)</b> — a confidence value. Noise means one bit here came out <span class="bx">wrong</span> (highlighted) — the decoder will fix it next.
+   <span class="doing">DOING: ${eqSym.length} symbols → ${corrupt.length} bits. Bit ${errIdx} flipped by noise → <span class="bx">${corrupt[errIdx]}</span>.</span>`,
+  kv:[['Output','soft bits / LLRs'],['Hard decision','sign of I and Q'],['Errors','1 bit flipped (shown red)'],['Next','descramble + decode']],
+  render:h=>{h.innerHTML=bitBox(bitsHTML(corrupt,{space:true,errAt:errIdx}));}},
+
+ {num:'15',name:'Descrambling',tag:'GOLD SEQUENCE',color:'n-rx',
+  doing:'XORs with the same cell sequence used at the transmitter — undoing the scrambling exactly.',
+  explain:`The receiver knows the cell's <b>Gold sequence</b> and XORs the bits with it again. Because XOR is self-inverse, this perfectly undoes stage 3 — the bit order from the encoder is restored (the noise error still rides along, to be fixed by decoding).
+   <span class="doing">DOING: received bits ⊕ same sequence → descrambled stream (error still at bit ${errIdx}).</span>`,
+  kv:[['Operation','bitwise XOR (same seq)'],['Undoes','stage 3 scrambling'],['Self-inverse','XOR ⊕ XOR = identity'],['Error','still present → decoder fixes']],
+  render:h=>{h.innerHTML=bitBox(bitsHTML(descr,{space:true,errAt:errIdx,parityFrom:8}));}},
+
+ {num:'16',name:'Channel Decoding (FEC)',tag:'LDPC · POLAR',color:'n-rx',
+  doing:'Uses the parity bits to detect the flipped bit, correct it, and verify the block with a CRC.',
+  explain:`The <b>LDPC/Polar decoder</b> recomputes the parity checks. The mismatching check (the <b>syndrome</b>) points straight at the corrupted bit, which is <b>flipped back</b>. A final <b>CRC</b> confirms the block is now error-free — this is why FEC was worth the extra bits.
+   <span class="doing">DOING: parity check → syndrome locates bit ${errIdx} → corrected → CRC PASS ✓</span>`,
+  kv:[['Decoder','LDPC belief propagation'],['Syndrome','flags the bad bit'],['Correction','flips it back'],['CRC','PASS — block clean']],
+  render:h=>{h.innerHTML=`<div class="bitline">${bitsHTML(corrupt.slice(0,8),{errAt:errIdx})}
+    <span style="color:#8a96b6;font-size:11px"> → decode → </span>
+    ${bitsHTML(PAYLOAD)}</div>
+    <div style="text-align:center;margin-top:8px;font-family:'Space Mono';font-size:11px;color:#34d399;font-weight:700">CRC ✓ — 1 bit error corrected</div>`;}},
+
+ {num:'17',name:'Recovered Digital Data',tag:'TRANSPORT BLOCK',color:'n-rx',
+  doing:'Delivers the fully recovered, error-free transport block back to the upper layers.',
+  explain:`The original <b>transport block</b> is reconstructed bit-for-bit and handed to the MAC layer. Compare it to stage 1 — identical. A HARQ ACK is sent back. The signal has completed the full round trip: bits → radio wave → bits.
+   <span class="doing">DOING: delivering recovered payload <b>${PAYLOAD.join('')}</b> → identical to stage 1 input ✓</span>`,
+  kv:[['Output','original 8-bit payload'],['Match','identical to stage 1'],['Feedback','HARQ ACK sent'],['Status','chain complete']],
+  render:h=>{h.innerHTML=bitBox(bitsHTML(PAYLOAD,{space:true}))+
+    `<div style="text-align:center;margin-top:6px;font-family:'Space Mono';font-size:10.5px;color:#34d399">= input from stage 1 ✓</div>`;}}
+];
+
+/* uplink uses the same stages but with UL-specific names where they differ */
+const UL_TX_OVERRIDE={
+ 0:{name:'UE Application Data / Bits',explain:`A <b>transport block</b> generated by the UE app, sent on <b>PUSCH</b> (data) or <b>PUCCH</b> (control).
+   <span class="doing">DOING: holding the 8 input bits → <b>${PAYLOAD.join('')}</b></span>`,
+   kv:[['Channel','PUSCH (uplink shared)'],['Size','8 bits (demo)'],['Source','UE application / buffer']]},
+ 4:{name:'Transform Precoding',tag:'DFT-s-OFDM',
+   doing:'Optionally spreads the symbols with a DFT before the IFFT — lowers PAPR to save UE battery and improve coverage.',
+   explain:`Uplink-only step. An extra <b>DFT</b> spreads the symbols before the IFFT, producing <b>DFT-s-OFDM</b> instead of plain CP-OFDM. This lowers the <b>Peak-to-Average Power Ratio</b>, so the UE's PA runs more efficiently — better battery life and cell-edge coverage. CP-OFDM is used when capacity matters more.
+    <span class="doing">DOING: DFT-spread the QPSK symbols → low-PAPR uplink waveform.</span>`,
+   kv:[['Mode','DFT-s-OFDM (optional)'],['Benefit','low PAPR → PA efficiency'],['Alt','CP-OFDM (higher capacity)'],['Why UL','UE power is limited']]},
+ 8:{name:'Radio Wave Sent Over Air',
+   explain:`The UE antenna radiates the wave carrying <b>PUSCH</b>, <b>PUCCH</b>, <b>SRS</b> and <b>PRACH</b> toward the gNodeB.
+    <span class="doing">DOING: RF current → EM wave carrying PUSCH / PUCCH / SRS / PRACH.</span>`,
+   kv:[['Carries (UL)','PUSCH · PUCCH · SRS · PRACH'],['Medium','free space'],['Speed','3×10⁸ m/s'],['Next','propagation + fading']]}
+};
+
+/* ---------- build the DOM for a stage list ---------- */
+function buildStages(arr,host,overrides){
+  host.innerHTML='';
+  arr.forEach((st,idx)=>{
+    const o=(overrides&&overrides[idx])||{};
+    const name=o.name||st.name, tag=o.tag||st.tag;
+    const doing=o.doing||st.doing, explain=o.explain||st.explain;
+    const kv=o.kv||st.kv;
+    const el=document.createElement('div');
+    el.className='stage';el.dataset.idx=idx;
+    el.innerHTML=`
+      <div class="s-head">
+        <div class="s-num ${st.color}">${st.num}</div>
+        <div class="s-titles"><div class="s-name">${name}</div><div class="s-tag">${tag}</div></div>
+        <div class="s-toggle">+</div>
+      </div>
+      <div class="s-body"><div class="s-inner">
+        <div class="s-explain">${explain}</div>
+        <dl class="kv">${kv.map(p=>`<dt>${p[0]}</dt><dd>${p[1]}</dd>`).join('')}</dl>
+        <div class="s-viz" data-viz></div>
+      </div></div>`;
+    host.appendChild(el);
+    const head=el.querySelector('.s-head');
+    head.addEventListener('click',()=>{
+      el.classList.toggle('open');
+      if(el.classList.contains('open')) st.render(el.querySelector('[data-viz]'));
+    });
+  });
+}
+buildStages(TX,$('#stagesDL'));
+buildStages(RX,$('#stagesDLrx'));
+buildStages(TX,$('#stagesUL'),UL_TX_OVERRIDE);
+buildStages(RX,$('#stagesULrx'));
+
+/* ---------- tab switching ---------- */
+let mode='dl';
+function setMode(m){
+  mode=m;
+  $('#tabDL').className='tab'+(m==='dl'?' on-dl':'');
+  $('#tabUL').className='tab'+(m==='ul'?' on-ul':'');
+  $('#laneDL').classList.toggle('hide',m!=='dl');
+  $('#laneUL').classList.toggle('hide',m!=='ul');
+  resetAll();
+}
+$('#tabDL').addEventListener('click',()=>setMode('dl'));
+$('#tabUL').addEventListener('click',()=>setMode('ul'));
+
+/* ---------- run engine ---------- */
+let speed=1, running=false, stepIdx=0;
+$('#speed').addEventListener('input',e=>{speed=parseFloat(e.target.value);$('#sv').textContent=speed.toFixed(1)+'×';});
+const wait=ms=>new Promise(r=>setTimeout(r,ms/speed));
+
+function laneEls(){
+  const dl=mode==='dl';
+  return {
+    lane: dl?$('#laneDL'):$('#laneUL'),
+    tx:[...(dl?$('#stagesDL'):$('#stagesUL')).children],
+    rx:[...(dl?$('#stagesDLrx'):$('#stagesULrx')).children],
+    air: dl?$('#airDL'):$('#airUL'),
+    eps: dl?$('#epDLs'):$('#epULs'),
+    epe: dl?$('#epDLe'):$('#epULe'),
+    txDef:TX, rxDef:RX,
+    txOv: dl?null:UL_TX_OVERRIDE
+  };
+}
+function resetAll(){
+  $$('.stage').forEach(s=>{s.classList.remove('lit','done','open');});
+  $$('.air').forEach(a=>a.classList.remove('go-dl','go-ul'));
+  $$('.ep').forEach(e=>e.classList.remove('talking'));
+  $('#epDLs').classList.add('talking');$('#epULs').classList.add('talking');
+  $('#laneDL').classList.add('active');$('#laneUL').classList.add('active');
+  stepIdx=0;
+  $('#status').textContent='Ready — Run the chain or open any block.';
+}
+function lightStage(el,st){
+  el.classList.add('lit','open');
+  st.render(el.querySelector('[data-viz]'));
+  el.scrollIntoView({behavior:'smooth',block:'center'});
+}
+async function runStage(el,st,label){
+  lightStage(el,st);
+  $('#status').textContent=label+' — '+st.doing;
+  await wait(1450);
+  el.classList.remove('lit');el.classList.add('done');
+}
+
+async function runChain(){
+  if(running)return;running=true;
+  $('#play').disabled=true;$('#step').disabled=true;
+  resetAll();
+  const L=laneEls();
+  L.eps.classList.add('talking');
+  await wait(700);
+  for(let i=0;i<L.tx.length;i++){
+    const st=L.txDef[i];
+    const ov=L.txOv&&L.txOv[i];
+    await runStage(L.tx[i], wrapStage(st,ov), `TX ${st.num}/17`);
+  }
+  L.eps.classList.remove('talking');
+  L.air.classList.add(mode==='dl'?'go-dl':'go-ul');
+  L.air.scrollIntoView({behavior:'smooth',block:'center'});
+  $('#status').textContent='📡 AIR INTERFACE — the EM wave propagates: path loss, multipath fading, Doppler and noise act on it.';
+  await wait(1900);
+  L.air.classList.remove('go-dl','go-ul');
+  L.epe.classList.add('talking');
+  for(let i=0;i<L.rx.length;i++){
+    const st=L.rxDef[i];
+    await runStage(L.rx[i], st, `RX ${st.num}/17`);
+  }
+  $('#status').textContent='✅ Complete — the original 8-bit payload was recovered error-free (FEC fixed 1 noise-induced bit flip).';
+  L.epe.scrollIntoView({behavior:'smooth',block:'center'});
+  running=false;$('#play').disabled=false;$('#step').disabled=false;
+}
+/* merge override into a stage object for rendering */
+function wrapStage(st,ov){
+  if(!ov)return st;
+  return Object.assign({},st,{
+    doing: ov.doing||st.doing,
+    render: st.render   // render stays the same (data identical)
+  });
+}
+
+async function stepOnce(){
+  if(running)return;
+  const L=laneEls();
+  const seq=[...L.tx.map((el,i)=>({el,st:L.txDef[i],lbl:`TX ${L.txDef[i].num}/17`})),
+             {air:true},
+             ...L.rx.map((el,i)=>({el,st:L.rxDef[i],lbl:`RX ${L.rxDef[i].num}/17`}))];
+  if(stepIdx>=seq.length){resetAll();return;}
+  $$('.stage').forEach(s=>s.classList.remove('lit'));
+  const cur=seq[stepIdx];
+  if(cur.air){
+    L.air.classList.add(mode==='dl'?'go-dl':'go-ul');
+    L.air.scrollIntoView({behavior:'smooth',block:'center'});
+    $('#status').textContent='📡 AIR INTERFACE — EM wave propagating (path loss, fading, noise).';
+    setTimeout(()=>L.air.classList.remove('go-dl','go-ul'),2400);
+  }else{
+    cur.el.classList.add('done');
+    lightStage(cur.el,cur.st);
+    $('#status').textContent=cur.lbl+' — '+cur.st.doing;
+  }
+  stepIdx++;
+}
+
+$('#play').addEventListener('click',runChain);
+$('#step').addEventListener('click',stepOnce);
+$('#reset').addEventListener('click',()=>{if(!running){resetAll();window.scrollTo({top:0,behavior:'smooth'});}});
+
+resetAll();
+})();
+</script>
+</body>
+</html>
